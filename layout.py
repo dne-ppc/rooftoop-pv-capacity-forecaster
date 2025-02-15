@@ -6,25 +6,22 @@ import pandas as pd
 from analysis import monte_carlo_forecast
 from plotting import create_dist_plot
 
-initial_capacity = 55  # MW
-default_years = 25
-max_growth = 1.0
-iterations = 1000
-probs = [0.1, 0.5, 0.9]
-step = 0.01
 
+def create_dist(
+    scenario, label, min_value, max_value, p10, p50, p90, step=0.01, probs=None
+):
 
-def create_dist(scenario, title, min_value, max_value, p10, p50, p90, step=0.01):
-
+    if probs is None:
+        probs = [0.1, 0.5, 0.9]
     st.divider()
 
     if scenario not in st.session_state:
         st.session_state[scenario] = {}
 
-    if title not in st.session_state:
-        st.session_state[scenario][title] = {}
+    if label not in st.session_state:
+        st.session_state[scenario][label] = {}
 
-    st.subheader(title)
+    st.subheader(label)
     left, right = st.columns(2)
     with left:
         st.container(height=70, border=False)
@@ -35,7 +32,7 @@ def create_dist(scenario, title, min_value, max_value, p10, p50, p90, step=0.01)
             max_value=max_value,
             value=p10,
             step=step,
-            key=f"{scenario}_{title}_p10",
+            key=f"{scenario}_{label}_p10",
         )
         p50 = st.slider(
             "P50",
@@ -43,7 +40,7 @@ def create_dist(scenario, title, min_value, max_value, p10, p50, p90, step=0.01)
             max_value=max_value,
             value=p50,
             step=step,
-            key=f"{scenario}_{title}_p50",
+            key=f"{scenario}_{label}_p50",
         )
         p90 = st.slider(
             "P90",
@@ -51,7 +48,7 @@ def create_dist(scenario, title, min_value, max_value, p10, p50, p90, step=0.01)
             max_value=max_value,
             value=p90,
             step=step,
-            key=f"{scenario}_{title}_p90",
+            key=f"{scenario}_{label}_p90",
         )
 
     with right:
@@ -66,79 +63,54 @@ def create_dist(scenario, title, min_value, max_value, p10, p50, p90, step=0.01)
             st.plotly_chart(
                 create_dist_plot(dist),
                 use_container_width=True,
-                key=f"{scenario}_{title}",
+                key=f"{scenario}_{label}",
             )
         except Exception as e:
             st.error(f"Error fitting installation cost distribution: {e}")
 
-    st.session_state[scenario][title] = dist
+    st.session_state[scenario][label] = dist
 
 
 def create_standard_scenario(idx, scenario_name):
+    # Load scenario-specific config
+    config = st.session_state["config"][scenario_name]
+    city_area_config = config.get("city_area")
+    pv_area_config = config.get("pv_area_percent")
+    panel_power_config = config.get("panel_power")
+    panel_gain_config = config.get("panel_gain")
+    panel_deg_config = config.get("panel_degradation_factor")
+    initial_capacity_config = config.get("initial_city_capacity")
+    ag_config = config.get("annual_growth_rate")
+    cf_config = config.get("capacity_factor")
+    ep_config = config.get("energy_price")
+    ip_config = config.get("installation_price")
+    discount_config = config.get("install_discount")
 
     years = st.session_state.years
 
     with st.container(border=True):
-
         st.subheader("City Capacity Bounds")
-
         col1, col2, col3 = st.columns(3)
-
         with col1:
-
             city_area = st.number_input(
-                "City Area (km²)",
-                min_value=1.0,
-                max_value=5000.0,
-                value=825.29,
-                step=5.0,
-                key=f"{scenario_name}_city_area",
+                key=f"{scenario_name}_city_area", **city_area_config
             )
-
             pv_area_percent = st.slider(
-                "Maximum PV Area Fraction (as a decimal)",
-                min_value=0.001,
-                max_value=0.20,
-                value=0.005,
-                step=0.001,
-                format="%.3f",
-                key=f"{scenario_name}_panel_coverage",
+                key=f"{scenario_name}_panel_coverage", **pv_area_config
             )
-
             st.session_state[scenario_name]["city_area"] = city_area
             st.session_state[scenario_name]["pv_area_percent"] = pv_area_percent
 
         with col2:
-
             panel_power = st.number_input(
-                "Initial Panel Power (W/m²)",
-                min_value=160,
-                max_value=350,
-                value=200,
-                step=5,
-                key=f"{scenario_name}_panel_power",
+                key=f"{scenario_name}_panel_power", **panel_power_config
             )
-
             panel_gain = st.slider(
-                "Panel Efficiency Gain (%/year)",
-                min_value=0.0,
-                max_value=0.2,
-                value=0.015,
-                step=0.001,
-                format="%.3f",
-                key=f"{scenario_name}_panel_eff_gain",
+                key=f"{scenario_name}_panel_eff_gain", **panel_gain_config
             )
-
             panel_degradation_factor = st.slider(
-                "Panel Degradation (%/year)",
-                min_value=0.0,
-                max_value=0.01,
-                value=0.005,
-                step=0.001,
-                format="%.3f",
-                key=f"{scenario_name}_panel_deg",
+                key=f"{scenario_name}_panel_deg", **panel_deg_config
             )
-
             st.session_state[scenario_name]["panel_power"] = panel_power
             st.session_state[scenario_name]["panel_gain"] = panel_gain
             st.session_state[scenario_name][
@@ -146,51 +118,28 @@ def create_standard_scenario(idx, scenario_name):
             ] = panel_degradation_factor
 
         with col3:
-
             initial_city_capacity = st.number_input(
-                "Initial City Capacity Power (MW)",
-                min_value=0,
-                max_value=1000,
-                value=55,
-                step=1,
-                key=f"{scenario_name}_initial_city_capacity",
+                key=f"{scenario_name}_initial_city_capacity", **initial_capacity_config
             )
-
             max_capacity_val = (
-                city_area
-                * pv_area_percent
-                * ((1 + panel_gain - panel_degradation_factor) ** years)
-                * panel_power
+                city_area * pv_area_percent * ((1 + panel_gain) ** years) * panel_power
             )
             st.metric(
-                label="City Maximum PV Capacity",
-                value=f"{int(max_capacity_val)} MW",
+                label="City Maximum PV Capacity", value=f"{int(max_capacity_val)} MW"
             )
-
             st.session_state[scenario_name][
                 "initial_city_capacity"
             ] = initial_city_capacity
 
-        create_dist(scenario_name, "Annual Growth Rate", 0.0, 1.0, 0.10, 0.20, 0.30)
-        create_dist(scenario_name, "Capacity Factor", 0.10, 0.25, 0.16, 0.18, 0.20)
-        create_dist(scenario_name, "Energy Price ($/kWh)", 0.01, 0.40, 0.05, 0.10, 0.25)
-        create_dist(
-            scenario_name,
-            "Installation Price($/kWWh)",
-            1.0,
-            4.0,
-            2.50,
-            2.75,
-            3.50,
-        )
+        # Create distribution sliders using values from config
+        create_dist(scenario_name, **ag_config)
+        create_dist(scenario_name, **cf_config)
+        create_dist(scenario_name, **ep_config)
+        create_dist(scenario_name, **ip_config)
 
         st.session_state[scenario_name]["install_discount"] = st.slider(
-            "Installation Cost Discount Rate",
-            min_value=0.0,
-            max_value=0.2,
-            value=0.07,
-            step=0.01,
-            key=f"{scenario_name}_install_discount",
+            key=f"{scenario_name}_install_discount_slider",
+            **discount_config
         )
 
         st.session_state[scenario_name]["color"] = px.colors.qualitative.Plotly[idx]
@@ -199,7 +148,6 @@ def create_standard_scenario(idx, scenario_name):
 
         if st.button("Delete scenario", key=f"{scenario_name}_delete_btn"):
             st.session_state.scenarios.pop(idx)
-
             del st.session_state[scenario_name]
             st.rerun()
 
