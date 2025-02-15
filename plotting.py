@@ -54,113 +54,87 @@ def create_dist_plot(m: str):
     return fig
 
 
-def add_forecast_traces(
-    fig: go.Figure,
-    years: int,
-    sim_data,
-    scenario_label,
-    color,
-    line_dash="solid",
+def create_forecast_plot(
+    forecast_choice,
     width=2,
 ):
-    """
-    Helper function to add forecast traces (p10, p50, p90) to a figure.
-    Now includes p10 and p90 in the legend.
-    """
-    x_vals = np.arange(1, years + 1)
-    p10_vals = np.percentile(sim_data, 10, axis=1)
-    p50_vals = np.median(sim_data, axis=1)
-    p90_vals = np.percentile(sim_data, 90, axis=1)
 
-    # p90 trace
-    fig.add_trace(
-        go.Scatter(
-            x=x_vals,
-            y=p90_vals,
-            mode="lines",
-            name=f"{scenario_label} - P90",
-            line=dict(color=color, dash="dot", width=width),
-            legendgroup=scenario_label,
+    data_name = f"{forecast_choice} DF"
+    fig = go.Figure()
+
+    yaxis_title = {
+        "Capacity": "Capacity (MW)",
+        "Energy": "Energy Production (kWh/year)",
+        "Revenue": "Revenue ($/year)",
+        "Install Cost": "Installation Costs ($/year)",
+    }[forecast_choice]
+
+    for scenario_name in st.session_state.scenarios:
+
+        df = st.session_state[scenario_name][data_name]
+
+        years = st.session_state.years
+        color = st.session_state[scenario_name]["color"]
+        x_vals = np.arange(1, years + 1)
+        p10_vals = np.percentile(df, 10, axis=1)
+        p50_vals = np.median(df, axis=1)
+        p90_vals = np.percentile(df, 90, axis=1)
+
+        # p90 trace
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=p90_vals,
+                mode="lines",
+                name=f"{scenario_name} - P90",
+                line=dict(
+                    color=color, dash="dot", width=width, shape="spline", smoothing=1.3
+                ),
+                legendgroup=scenario_name,
+            )
         )
-    )
 
-    # p50 trace (Median)
-    fig.add_trace(
-        go.Scatter(
-            x=x_vals,
-            y=p50_vals,
-            mode="lines",
-            name=f"{scenario_label} - P50",
-            line=dict(color=color, dash=line_dash, width=width),
-            legendgroup=scenario_label,
+        # p50 trace (Median)
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=p50_vals,
+                mode="lines",
+                name=f"{scenario_name} - P50",
+                line=dict(
+                    color=color,
+                    dash="solid",
+                    width=width,
+                    shape="spline",
+                    smoothing=1.3,
+                ),
+                # legendgroup=scenario_name,
+            )
         )
-    )
 
-    # p10 trace
-    fig.add_trace(
-        go.Scatter(
-            x=x_vals,
-            y=p10_vals,
-            mode="lines",
-            name=f"{scenario_label} - P10",
-            line=dict(color=color, dash="dot", width=width),
-            legendgroup=scenario_label,
+        # p10 trace
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=p10_vals,
+                mode="lines",
+                name=f"{scenario_name} - P10",
+                line=dict(
+                    color=color, dash="dash", width=width, shape="spline", smoothing=1.3
+                ),
+                # legendgroup=scenario_name,
+            )
         )
-    )
 
-
-def update_forecast_plots(
-    scenario_name,
-):
-
-    capacity_fig = st.session_state["capacity_fig"]
-    energy_fig = st.session_state["energy_fig"]
-    revenue_fig = st.session_state["revenue_fig"]
-    cost_fig = st.session_state["cost_fig"]
-
-    cap_df = st.session_state[scenario_name]["Capacity DF"]
-    energy_df = st.session_state[scenario_name]["Energy DF"]
-    revenue_df = st.session_state[scenario_name]["Revenue DF"]
-    cost_df = st.session_state[scenario_name]["Install Cost DF"]
-
-    years = st.session_state.years
-
-    color = st.session_state[scenario_name]["color"]
-
-    add_forecast_traces(
-        capacity_fig, years, cap_df, scenario_name + " - Capacity", color
-    )
-    add_forecast_traces(
-        energy_fig, years, energy_df, scenario_name + " - Energy", color
-    )
-    add_forecast_traces(
-        revenue_fig, years, revenue_df, scenario_name + " - Revenue", color
-    )
-    add_forecast_traces(cost_fig, years, cost_df, scenario_name + " - Cost", color)
-    # add_forecast_traces(net_fig, years, net_df, scenario_name + " - Net", color)
-
-    # Create capacity forecast figure
-
-    capacity_fig.update_layout(
-        title="Capacity Forecast (MW)",
+    fig.update_layout(
+        title=f"{forecast_choice} Forecast",
         xaxis_title="Year",
-        yaxis_title="Capacity (MW)",
+        yaxis_title=yaxis_title,
+        height=800,
+        hovermode="x unified",
     )
-    energy_fig.update_layout(
-        title="Energy Forecast (kWh/year)",
-        xaxis_title="Year",
-        yaxis_title="Energy Production (kWh/year)",
-    )
-    revenue_fig.update_layout(
-        title="PV Revenue Forecast ($/year)",
-        xaxis_title="Year",
-        yaxis_title="Revenue ($/year)",
-    )
-    cost_fig.update_layout(
-        title="Total Installation Cost Forecast ($/year)",
-        xaxis_title="Year",
-        yaxis_title="Installation Costs ($/year)",
-    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def create_npv_plot(forecast_name, discount_rate, cumulative=False):
@@ -332,16 +306,16 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
         pct_change_df = df[iter_cols].pct_change().iloc[1:]
 
         # Flatten all percent change values into a single array and remove any NaNs.
-        all_pct_changes = pct_change_df.values.flatten()
+        all_pct_changes = pct_change_df.values.flatten() * 100
         all_pct_changes = all_pct_changes[~np.isnan(all_pct_changes)]
 
         # Create a PDF histogram trace.
         pdf_trace = go.Histogram(
             x=all_pct_changes,
             name=scenario + "PDF",
-            opacity=0.75,
-            nbinsx=30,
-            histnorm="probability density",
+            opacity=0.6,
+            nbinsx=120,
+            histnorm="probability",
             marker_color=st.session_state[scenario]["color"],
             legendgroup=scenario,
         )
@@ -350,9 +324,9 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
         cdf_trace = go.Histogram(
             x=all_pct_changes,
             name=scenario + "CDF",
-            opacity=0.75,
-            nbinsx=30,
-            histnorm="probability density",
+            opacity=0.6,
+            nbinsx=120,
+            histnorm="probability",
             cumulative=dict(enabled=True),
             marker_color=st.session_state[scenario]["color"],
             legendgroup=scenario,
@@ -372,161 +346,10 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
 
     # Set axis titles for both subplots.
     fig.update_xaxes(title_text="Year-to-Year Percent Change", row=1, col=1)
-    fig.update_yaxes(title_text="Probability Density", row=1, col=1)
+    fig.update_yaxes(title_text="Probability", row=1, col=1)
 
     fig.update_xaxes(title_text="Year-to-Year Percent Change", row=2, col=1)
-    fig.update_yaxes(title_text="Cumulative Density", row=2, col=1)
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def plot_forecast_violin_overlay(forecast_name):
-    """
-    Creates an overlaid violin plot for a specific forecast across all years for multiple scenarios.
-
-    For each scenario in scenario_names, the function:
-      - Retrieves the forecast DataFrame from st.session_state[scenario] using the key "<forecast_name> DF".
-      - Reshapes the DataFrame into long format (with columns "Year", "Value", and "Scenario").
-
-    All scenarios are combined into one plot so that the distribution for each year is
-    visualized with separate violin traces for each scenario.
-
-    The figure uses hovermode="x unified" for an improved interactive experience.
-
-    Parameters:
-      - scenario_names (list of str): A list of scenario keys in st.session_state.
-      - forecast_name (str): The forecast to analyze (e.g., "Capacity", "Energy",
-                             "Revenue", "Cost", or "Net").
-
-    Returns:
-      - A Plotly figure object containing the overlaid violin plot.
-    """
-
-    all_data = []
-
-    forecast_key = f"{forecast_name} DF"
-
-    # Loop through each scenario, retrieve and reshape the data.
-    for scenario in st.session_state.scenarios:
-
-        df = st.session_state[scenario][forecast_key]
-        # Identify iteration columns (all columns except "Year").
-        iter_cols = [col for col in df.columns if col != "Year"]
-
-        # Convert the wide DataFrame to long format.
-        df_long = pd.melt(
-            df,
-            id_vars="Year",
-            value_vars=iter_cols,
-            var_name="Iteration",
-            value_name="Value",
-        )
-        df_long["Scenario"] = scenario
-        all_data.append(df_long)
-
-    # Combine all scenario data into one DataFrame.
-    combined_df = pd.concat(all_data, ignore_index=True)
-
-    # Create the figure.
-    fig = go.Figure()
-
-    # For each scenario, add a violin trace.
-    for scenario in combined_df["Scenario"].unique():
-        scenario_df = combined_df[combined_df["Scenario"] == scenario]
-        fig.add_trace(
-            go.Violin(
-                x=scenario_df["Year"],
-                y=scenario_df["Value"],
-                name=scenario,
-                box_visible=True,
-                meanline_visible=True,
-                opacity=0.7,
-                side="both",  # Center the violins on each x value.
-                spanmode="hard",
-            )
-        )
-
-    fig.update_layout(
-        title=f"Violin Plot of {forecast_name} by Year for Multiple Scenarios",
-        hovermode="x unified",
-        xaxis_title="Year",
-        yaxis_title=forecast_name,
-        height=1000,
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def plot_forecast_violin_overlay_faceted(
-    forecast_list=["Capacity", "Energy", "Revenue", "Cost", "Net", "Cost Per MW"]
-):
-    """
-    Creates a faceted violin plot for multiple forecast types across multiple scenarios.
-
-    For each forecast type in forecast_list and for each scenario in scenario_names, the function:
-      - Retrieves the forecast DataFrame from st.session_state[scenario] using the key "<forecast> DF".
-      - Reshapes the DataFrame into long format with columns "Year", "Value", and adds columns "Scenario" and "Forecast".
-
-    The combined data is used to create a faceted violin plot (with one row per forecast type) that shows
-    the distribution of simulation iterations for each year.
-
-    Parameters:
-      - scenario_names (list of str): A list of scenario keys in st.session_state.
-      - forecast_list (list of str): A list of forecast types to compile. Defaults to
-                                     ["Capacity", "Energy", "Revenue", "Cost", "Net", "Cost Per MW"].
-
-    Returns:
-      - A Plotly figure object containing the faceted violin plots.
-    """
-
-    all_data = []
-
-    # Loop over each forecast type and scenario to compile data.
-    for forecast in forecast_list:
-        forecast_key = f"{forecast} DF"
-        for scenario in st.session_state.scenarios:
-
-            df = st.session_state[scenario][forecast_key]
-            # Identify iteration columns (all columns except "Year").
-            iter_cols = [col for col in df.columns if col != "Year"]
-
-            # Melt the DataFrame into long format.
-            df_long = pd.melt(
-                df,
-                id_vars="Year",
-                value_vars=iter_cols,
-                var_name="Iteration",
-                value_name="Value",
-            )
-            df_long["Scenario"] = scenario
-            df_long["Forecast"] = forecast
-            all_data.append(df_long)
-
-    # Combine all data into a single DataFrame.
-    if not all_data:
-        raise ValueError(
-            "No data found for the specified scenarios and forecast types."
-        )
-    combined_df = pd.concat(all_data, ignore_index=True)
-
-    # Create the faceted violin plot.
-    fig = px.violin(
-        combined_df,
-        x="Year",
-        y="Value",
-        color="Scenario",
-        facet_row="Forecast",
-        box=True,  # Display box plots inside the violins.
-        points="all",  # Show all individual data points.
-        title="Violin Plots of Forecasts by Year (Faceted by Forecast Type)",
-        labels={"Value": "Forecast Value"},
-    )
-
-    # Update layout for unified hover and improve spacing.
-    fig.update_layout(hovermode="x unified", margin=dict(l=50, r=50, t=50, b=50))
-
-    # Optionally, adjust the facet row spacing for better readability.
-    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    fig.update_yaxes(title_text="Cumulative Probability", row=2, col=1)
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -559,7 +382,8 @@ def plot_tracking_data(metric):
                 y=y_data,
                 mode="lines+markers",
                 name=scenario,
-                line_color=color,
+                # line_color=color,
+                line={"shape": "spline", "smoothing": 1.3, "color": color},
             )
         )
 
@@ -569,6 +393,7 @@ def plot_tracking_data(metric):
         yaxis_title=metric,
         template="plotly_white",
         height=1000,
+        hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -616,6 +441,7 @@ def create_tornado_figure(bounds_df: pd.DataFrame, title, x_axis_title):
                     mode="lines",
                     line=dict(color="red", width=10),
                     showlegend=False,
+                    name="Decrease To",
                 )
             )
 
@@ -628,6 +454,7 @@ def create_tornado_figure(bounds_df: pd.DataFrame, title, x_axis_title):
                     mode="lines",
                     line=dict(color="green", width=10),
                     showlegend=False,
+                    name="Increase To",
                 )
             )
 
@@ -647,7 +474,10 @@ def create_tornado_figure(bounds_df: pd.DataFrame, title, x_axis_title):
         xaxis_title=x_axis_title,
         yaxis=dict(title="Parameter", automargin=True),
         margin=dict(l=150, r=50, t=80, b=50),
-        height=600
+        height=600,
+        hovermode="x unified",
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+
