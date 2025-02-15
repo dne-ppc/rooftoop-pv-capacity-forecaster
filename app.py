@@ -61,7 +61,7 @@ sections = pd.DataFrame(
             "function": layout.create_change_dist_tab,
         },
         {
-            "title": 'Timeseries Metrics"',
+            "title": 'Timeseries Metrics',
             "function": layout.create_ts_metrics_tab,
         },
         {
@@ -69,12 +69,12 @@ sections = pd.DataFrame(
             "function": layout.create_cap_sensitivity_tab,
         },
         {
-            "title": 'Energy Sensitivity"',
+            "title": 'Energy Sensitivity',
             "function": layout.create_energy_sensitivity_tab,
         },
         {
-            "title": 'Revenue Sensitivity"',
-            "function": layout.create_energy_sensitivity_tab,
+            "title": 'Revenue Sensitivity',
+            "function": layout.create_rev_sensitivity_tab,
         },
         {"title": "NPV", "function": layout.create_npv_tab},
     ]
