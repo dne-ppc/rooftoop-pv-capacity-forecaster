@@ -73,9 +73,9 @@ def monte_carlo_forecast(scenario_name, max_growth=1, sensitivity=None):
     cf_dist = st.session_state[scenario_name]["Capacity Factor"]
     price_dist = st.session_state[scenario_name]["Energy Price ($/kWh)"]
     install_dist = st.session_state[scenario_name]["Installation Price($/kWWh)"]
-    growth_dist = st.session_state[scenario_name]["Annual Growth Rate"]
+    growth_dist = st.session_state[scenario_name]["Annual Growth Factor"]
 
-    if sensitivity == "Annual Growth Rate":
+    if sensitivity == "Annual Growth Factor":
         growth_rates = np.full([iterations, years], growth_dist)
     else:
         growth_rates = metalog.r(m=growth_dist, n=iterations * years).reshape(
@@ -253,9 +253,9 @@ def monte_carlo_forecast(scenario_name, max_growth=1, sensitivity=None):
     cf_dist = st.session_state[scenario_name]["Capacity Factor"]
     price_dist = st.session_state[scenario_name]["Energy Price ($/kWh)"]
     install_dist = st.session_state[scenario_name]["Installation Price($/kWWh)"]
-    growth_dist = st.session_state[scenario_name]["Annual Growth Rate"]
+    growth_dist = st.session_state[scenario_name]["Annual Growth Factor"]
 
-    if sensitivity == "Annual Growth Rate":
+    if sensitivity == "Annual Growth Factor":
         growth_rates = np.full([iterations, years], growth_dist)
     else:
         growth_rates = metalog.r(m=growth_dist, n=iterations * years).reshape(

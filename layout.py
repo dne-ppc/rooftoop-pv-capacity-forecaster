@@ -1,10 +1,13 @@
+import os
+
 import streamlit as st
 import plotly.express as px
 from metalog import metalog
 import pandas as pd
+import yaml
 
-from analysis import monte_carlo_forecast
-from plotting import create_dist_plot
+import plotting
+import analysis
 
 
 def create_dist(
@@ -61,7 +64,7 @@ def create_dist(
                 probs=probs,
             )
             st.plotly_chart(
-                create_dist_plot(dist),
+                plotting.create_dist_plot(dist),
                 use_container_width=True,
                 key=f"{scenario}_{label}",
             )
@@ -72,19 +75,6 @@ def create_dist(
 
 
 def create_standard_scenario(idx, scenario_name):
-    # Load scenario-specific config
-    config = st.session_state["config"][scenario_name]
-    city_area_config = config.get("city_area")
-    pv_area_config = config.get("pv_area_percent")
-    panel_power_config = config.get("panel_power")
-    panel_gain_config = config.get("panel_gain")
-    panel_deg_config = config.get("panel_degradation_factor")
-    initial_capacity_config = config.get("initial_city_capacity")
-    ag_config = config.get("annual_growth_rate")
-    cf_config = config.get("capacity_factor")
-    ep_config = config.get("energy_price")
-    ip_config = config.get("installation_price")
-    discount_config = config.get("install_discount")
 
     years = st.session_state.years
 
@@ -92,64 +82,51 @@ def create_standard_scenario(idx, scenario_name):
         st.subheader("City Capacity Bounds")
         col1, col2, col3 = st.columns(3)
         with col1:
-            city_area = st.number_input(
-                key=f"{scenario_name}_city_area", **city_area_config
-            )
-            pv_area_percent = st.slider(
-                key=f"{scenario_name}_panel_coverage", **pv_area_config
-            )
-            st.session_state[scenario_name]["city_area"] = city_area
-            st.session_state[scenario_name]["pv_area_percent"] = pv_area_percent
+            city_area = create_input(scenario_name, "city_area")
+            pv_area_percent = create_input(scenario_name, "pv_area_percent")
 
         with col2:
-            panel_power = st.number_input(
-                key=f"{scenario_name}_panel_power", **panel_power_config
-            )
-            panel_gain = st.slider(
-                key=f"{scenario_name}_panel_eff_gain", **panel_gain_config
-            )
-            panel_degradation_factor = st.slider(
-                key=f"{scenario_name}_panel_deg", **panel_deg_config
-            )
-            st.session_state[scenario_name]["panel_power"] = panel_power
-            st.session_state[scenario_name]["panel_gain"] = panel_gain
-            st.session_state[scenario_name][
-                "panel_degradation_factor"
-            ] = panel_degradation_factor
+            panel_power = create_input(scenario_name, "panel_power")
+            panel_gain = create_input(scenario_name, "panel_gain")
+            create_input(scenario_name, "panel_degradation_factor")
 
         with col3:
-            initial_city_capacity = st.number_input(
-                key=f"{scenario_name}_initial_city_capacity", **initial_capacity_config
-            )
-            max_capacity_val = (
-                city_area * pv_area_percent * ((1 + panel_gain) ** years) * panel_power
-            )
+            create_input(scenario_name, "initial_city_capacity")
+            max_gain = (1 + panel_gain) ** years
+            max_capacity_val = city_area * pv_area_percent * max_gain * panel_power
             st.metric(
                 label="City Maximum PV Capacity", value=f"{int(max_capacity_val)} MW"
             )
-            st.session_state[scenario_name][
-                "initial_city_capacity"
-            ] = initial_city_capacity
 
         # Create distribution sliders using values from config
-        create_dist(scenario_name, **ag_config)
-        create_dist(scenario_name, **cf_config)
-        create_dist(scenario_name, **ep_config)
-        create_dist(scenario_name, **ip_config)
+        config = st.session_state["config"][scenario_name]
+        create_dist(scenario_name, **config["annual_growth_rate"])
+        create_dist(scenario_name, **config["capacity_factor"])
+        create_dist(scenario_name, **config["energy_price"])
+        create_dist(scenario_name, **config["installation_price"])
 
-        st.session_state[scenario_name]["install_discount"] = st.slider(
-            key=f"{scenario_name}_install_discount_slider",
-            **discount_config
-        )
+        create_input(scenario_name, "install_discount")
 
         st.session_state[scenario_name]["color"] = px.colors.qualitative.Plotly[idx]
 
-        monte_carlo_forecast(scenario_name)
+        analysis.monte_carlo_forecast(scenario_name)
 
         if st.button("Delete scenario", key=f"{scenario_name}_delete_btn"):
             st.session_state.scenarios.pop(idx)
             del st.session_state[scenario_name]
             st.rerun()
+
+
+def create_input(scenario_name: str, input_name: str):
+
+    config = st.session_state["config"][scenario_name][input_name]
+    key = f"{scenario_name}_{input_name}"
+    input_type = config.pop("input_type")
+    input_cls = getattr(st, input_type)
+    elem = input_cls(key=key, **config)
+    config["input_type"] = input_type
+    st.session_state[scenario_name][input_name] = elem
+    return elem
 
 
 def get_sensitivity_bounds(key):
@@ -196,7 +173,7 @@ def get_sensitivity_bounds(key):
         },
         {
             "Impact": "positive",
-            "Parameter": "Annual Growth Rate",
+            "Parameter": "Annual Growth Factor",
             "Lower Bound": 0.01,
             "Upper Bound": 0.50,
         },
@@ -219,7 +196,6 @@ def get_sensitivity_bounds(key):
         hide_index=True,
         column_config={
             "Parameter": st.column_config.TextColumn("Parameter", disabled=True),
-            "Type": {"hidden": True},
         },
         use_container_width=True,
     )
@@ -227,7 +203,9 @@ def get_sensitivity_bounds(key):
     return bounds_df
 
 
-def show_help_modal():
+def show_help_modal(
+        tab
+):
     """
     Displays a modal with detailed instructions on how to use the Calgary Rooftop Solar Forecast application.
 
@@ -238,8 +216,8 @@ def show_help_modal():
       - What you can do and learn from each tab in the application.
     """
     # When the "Help" button is clicked, open a modal dialog.
-
-    st.markdown(
+    with tab:
+        st.markdown(
         r"""
         ##  Help & Usage Guide
 
@@ -259,7 +237,7 @@ def show_help_modal():
             - **Panel Efficiency Gain (%/year):** The rate at which new panels become more efficient, improving capacity.
             - **Panel Degradation (%/year):** The annual loss in performance of installed panels.
         - **Configuring Distributions:**  
-            For each key parameter (e.g., **Annual Growth Rate**, **Capacity Factor**, **Energy Price (\$/kWh)**, and **Installation Price (\$/kWWh)**):
+            For each key parameter (e.g., **Annual Growth Factor**, **Capacity Factor**, **Energy Price (\$/kWh)**, and **Installation Price (\$/kWWh)**):
             - You’ll see three sliders for **P10**, **P50**, and **P90**. These represent the 10th percentile (optimistic), median, and 90th percentile (pessimistic) estimates.
             - Adjusting these sliders shapes the underlying probability distributions (using a metalog fit) which in turn affects the forecasts.
             - **Implications:** A change in these distributions influences the simulation outcomes. For example, a higher median energy price increases forecasted revenues, while a wider spread between P10 and P90 indicates higher uncertainty.
@@ -455,7 +433,7 @@ For each simulation year, the following steps are performed:
 
 For each year and simulation iteration, the following key parameters are sampled from metalog distributions (configured via P10, P50, and P90 sliders):
 
-- **Annual Growth Rate (g)**
+- **Annual Growth Factor (g)**
 - **Capacity Factor (CF)**
 - **Energy Price**
 - **Installation Price**
@@ -479,9 +457,6 @@ By adjusting both the deterministic inputs (like city area and base panel power)
 Use this guide to understand how each element of the simulation contributes to forecasting solar capacity, energy, revenue, and costs.
     """
     return st.markdown(explanation_md)
-
-
-import streamlit as st
 
 
 def npv_explanation():
@@ -670,7 +645,7 @@ def show_energy_sensitivity_info():
 
         - **Parameter Variation:**  
           Each slider-controlled parameter (such as *PV Area Fraction*, *Panel Efficiency Gain*, 
-          *Panel Degradation*, *Capacity Factor*, and *Annual Growth Rate*) is individually set to its 
+          *Panel Degradation*, *Capacity Factor*, and *Annual Growth Factor*) is individually set to its 
           lower and upper bounds.
 
         - **Re-simulation:**  
@@ -721,3 +696,211 @@ def show_revenue_sensitivity_info():
         - The results are visualized using tornado diagrams, making it clear which parameters drive the most significant changes.
         """
     )
+
+
+def create_controls_tab(tab):
+    with tab:
+        st.header("Controls & Distributions")
+
+        # Scenario Management Container
+        with st.container():
+            st.header("Manage Forecast Scenarios")
+            if "scenarios" not in st.session_state:
+                st.session_state.scenarios = []
+
+        try:
+            template_files = [f for f in os.listdir("scenarios") if f.endswith(".yaml")]
+            templates = [os.path.splitext(f)[0] for f in template_files]
+        except Exception as e:
+            st.error("Error reading scenarios folder: " + str(e))
+            templates = []
+
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_template = st.selectbox("Select Scenario Template", templates)
+
+        with col2:
+            scenario_name = st.text_input("Scenario Name", value=selected_template)
+
+        if st.button("Create scenario"):
+            if scenario_name not in st.session_state.scenarios:
+                config_path = os.path.join("scenarios", f"{selected_template}.yaml")
+                if os.path.exists(config_path):
+                    with open(config_path, "r") as f:
+                        config = yaml.safe_load(f)
+                st.session_state.scenarios.append(scenario_name)
+                st.session_state[scenario_name] = {}
+                st.session_state["config"][scenario_name] = config
+
+        # Display a tab for each scenario if one or more exist.
+        if st.session_state.scenarios:
+            scenario_tabs = st.tabs(st.session_state.scenarios)
+            for idx, (tab, scenario) in enumerate(
+                zip(scenario_tabs, st.session_state.scenarios)
+            ):
+                with tab:
+                    create_standard_scenario(idx, scenario)
+
+
+def create_forecasts_tab(tab):
+
+    with tab:
+        st.header("Forecasts")
+        with st.expander("Detailed Forecast Calculation Information"):
+            monte_carlo_simulation_explanation()
+
+        forecasts = ["Capacity", "Energy", "Revenue", "Install Cost"]
+
+        if st.session_state.scenarios:
+            forecast_choice = st.selectbox(
+                "Seelct forecast to display",
+                options=forecasts,
+                key="select_forecast_metric",
+            )
+
+            if forecast_choice:
+                plotting.create_forecast_plot(forecast_choice)
+
+
+def create_change_dist_tab(tab):
+    with tab:
+        st.header("Change Distributions")
+        with st.expander("Detailed Change Distribution Information"):
+            change_distribution_explanation()
+
+        forecasts = ["Capacity", "Energy", "Revenue", "Install Cost"]
+        forecast_choice = st.selectbox("Pick", options=forecasts, key="change_dist")
+
+        if st.session_state.scenarios:
+            plotting.plot_all_scenarios_pdf_cdf_histograms(forecast_choice)
+
+
+def create_ts_metrics_tab(tab):
+
+    with tab:
+        st.header("Time Series Metrics")
+        with st.expander("Detailed Time Series Metrics Information"):
+            time_series_metrics_explanation()
+
+        metrics = [
+            "New Panel Power Rating (W/m²)",
+            "Panel Degradation Factor (%)",
+            "Panel Power Gain Factor (%)",
+            "Install Discount Factor (%)",
+            "Median Installed Area (km²)",
+            "Median Installed City Coverage (%)",
+            "Median Incremental Capacity (MW)",
+        ]
+        metric_choice = st.selectbox(
+            "Pick a metric", options=metrics, key="tracking_select"
+        )
+        if st.session_state.scenarios:
+            plotting.plot_tracking_data(metric_choice)
+
+
+def create_cap_sensitivity_tab(tab):
+    with tab:
+        st.header("Sensitivity Analysis: Total Capacity")
+        if st.session_state.scenarios:
+            scenario = st.selectbox(
+                "Select the scenario",
+                options=st.session_state.scenarios,
+                key="select_capacity_sensitivity",
+            )
+            bounds = get_sensitivity_bounds("Capacity")
+
+            sensitivity_results = analysis.sensitivity_total(
+                scenario, bounds, "Capacity", method="max"
+            )
+            plotting.create_tornado_figure(
+                sensitivity_results,
+                "Sensitivity of Max Capacity to Parameters",
+                "Capacity (MW)",
+            )
+
+
+def create_energy_sensitivity_tab(tab):
+
+    with tab:
+        st.header("Sensitivity Analysis: Total Energy Production")
+
+        with st.expander("Detailed Energy SensitivityAnalysis Information"):
+            show_energy_sensitivity_info()
+
+        if st.session_state.scenarios:
+            scenario = st.selectbox(
+                "Select the scenario",
+                options=st.session_state.scenarios,
+                key="select_energy_sensitivity",
+            )
+            bounds = get_sensitivity_bounds("Total Energy")
+
+            sensitivity_results = analysis.sensitivity_total(scenario, bounds, "Energy")
+            sensitivity_results["Low"] /= 1e6
+            sensitivity_results["High"] /= 1e6
+            sensitivity_results["Baseline"] /= 1e6
+            plotting.create_tornado_figure(
+                sensitivity_results,
+                "Sensitivity of Total Energy to Parameters",
+                "Total Energy (GWh)",
+            )
+
+
+def create_rev_sensitivity_tab(tab):
+
+    with tab:
+        st.header("Sensitivity Analysis: Cumulative NPV for Revenue")
+
+        with st.expander("Detailed NPV Sensitivity Analysis Information"):
+            show_revenue_sensitivity_info()
+
+        discount_rate = st.slider(
+            "Discount Rate",
+            min_value=0.0,
+            max_value=0.2,
+            value=0.08,
+            step=0.01,
+            help="Select the discount rate (as a decimal)",
+            key="sensitivity_df",
+        )
+        if st.session_state.scenarios:
+            scenario = st.selectbox(
+                "Select the scenario",
+                options=st.session_state.scenarios,
+                key="select_npv_sensitivity",
+            )
+            bounds = get_sensitivity_bounds("Revenue NPV")
+            sensitivity_results = analysis.sensitivity_cumulative_npv_revenue(
+                scenario, bounds, discount_rate
+            )
+            plotting.create_tornado_figure(
+                sensitivity_results,
+                "Sensitivity of Cumulative NPV (Revenue) to Parameters",
+                "Cumulative NPV ($)",
+            )
+
+
+def create_npv_tab(tab):
+
+    with tab:
+        st.header("NPV Forecast")
+        with st.expander("Detailed NPV Information"):
+            npv_explanation()
+
+        forecasts = ["Revenue", "Install Cost"]
+        forecast_choice = st.selectbox("Pick", options=forecasts, key="npv_select")
+
+        discount_rate = st.slider(
+            "Discount Rate",
+            min_value=0.0,
+            max_value=0.2,
+            value=0.08,
+            step=0.01,
+            help="Select the discount rate (as a decimal)",
+            key="npv_of_forecast_df",
+        )
+
+        is_cumulative = st.checkbox("Cumulative NPV", value=True)
+        plotting.create_npv_plot(
+            forecast_choice, discount_rate, cumulative=is_cumulative
+        )
