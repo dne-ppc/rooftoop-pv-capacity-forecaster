@@ -6,6 +6,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 
+np.float_ = np.float64
+
+
 def create_dist_plot(m: str):
     """
     Create a distribution plot showing the PDF and CDF.
