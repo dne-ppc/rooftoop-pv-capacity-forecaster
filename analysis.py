@@ -305,8 +305,6 @@ def monte_carlo_forecast(scenario_name, max_growth=1, sensitivity=None):
     # Simulation loop over forecast years.
     for year in range(years):
 
-        
-
         # --- Logistic Growth Based on Area ---
         # Compute the available area fraction (1 means full availability, 0 means fully saturated).
         available_area_fraction = 1 - area_installed / total_possible_area
@@ -337,7 +335,7 @@ def monte_carlo_forecast(scenario_name, max_growth=1, sensitivity=None):
 
         # Energy, Revenue, and Cost Calculations.
         energy[:, year] = (
-            capacities[:, year + 1]  * conversion_constant * cf_samples[:, year]
+            capacities[:, year + 1] * conversion_constant * cf_samples[:, year]
         )
         revenue[:, year] = energy[:, year] * price_samples[:, year]
         costs[:, year] = (
@@ -496,7 +494,7 @@ def sensitivity_cumulative_npv_revenue(scenario_name, bounds_df, discount_rate):
     return bounds_df
 
 
-def compute_metric_summary(scenario_name,metric,method='sum'):
+def compute_metric_summary(scenario_name, metric, method="sum"):
     """
     Computes the total energy production using the median (P50) energy forecast
     from st.session_state[scenario_name]["Energy DF"].
@@ -509,7 +507,9 @@ def compute_metric_summary(scenario_name,metric,method='sum'):
     """
     df = st.session_state[scenario_name].get(f"{metric} DF")
     if df is None or df.empty:
-        st.error(f"{metric} forecast data not available. Please run the simulation first.")
+        st.error(
+            f"{metric} forecast data not available. Please run the simulation first."
+        )
         return None
     # Remove the "Year" column if present.
     if "Year" in df.columns:
@@ -518,13 +518,13 @@ def compute_metric_summary(scenario_name,metric,method='sum'):
     # Compute the median (P50) energy production for each year.
     p50 = df.quantile(0.50, axis=1).values
     # Sum the median energy production across all years.
-    if method == 'sum':
+    if method == "sum":
         return np.sum(p50)
-    if method == 'max':
+    if method == "max":
         return np.max(p50)
 
 
-def sensitivity_total(scenario_name, bounds_df, metric, method='sum'):
+def sensitivity_total(scenario_name, bounds_df, metric, method="sum"):
     """
     For each slider-controlled parameter listed in bounds_df, this function:
       - Saves the baseline value from st.session_state,
@@ -549,7 +549,7 @@ def sensitivity_total(scenario_name, bounds_df, metric, method='sum'):
     # Run baseline simulation.
     with st.spinner("Running baseline simulation..."):
         monte_carlo_forecast(scenario_name)
-    baseline_energy = compute_metric_summary(scenario_name,metric,method)
+    baseline_energy = compute_metric_summary(scenario_name, metric, method)
     if baseline_energy is None:
         st.error("Baseline simulation did not produce energy data.")
         return bounds_df
@@ -567,13 +567,13 @@ def sensitivity_total(scenario_name, bounds_df, metric, method='sum'):
         st.session_state[scenario_name][param] = low_val
         with st.spinner(f"Running simulation with {param} = {low_val}..."):
             monte_carlo_forecast(scenario_name, sensitivity=param)
-        energy_low = compute_metric_summary(scenario_name,metric,method)
+        energy_low = compute_metric_summary(scenario_name, metric, method)
 
         # Test the upper bound.
         st.session_state[scenario_name][param] = high_val
         with st.spinner(f"Running simulation with {param} = {high_val}..."):
             monte_carlo_forecast(scenario_name, sensitivity=param)
-        energy_high = compute_metric_summary(scenario_name,metric,method)
+        energy_high = compute_metric_summary(scenario_name, metric, method)
 
         energy_low_list.append(energy_low)
         energy_high_list.append(energy_high)

@@ -12,6 +12,8 @@ Modules:
     - analysis: Contains the Monte Carlo simulation logic and sensitivity analysis functions.
 """
 
+import os
+
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -19,6 +21,8 @@ from plotly.subplots import make_subplots
 import plotting
 import layout
 import analysis
+
+import yaml
 
 # -----------------------------------------------------------------------------
 # Page Configuration and Session State Initialization
@@ -31,6 +35,9 @@ if "years" not in st.session_state:
 
 if "iterations" not in st.session_state:
     st.session_state.iterations = 1000
+
+if "config" not in st.session_state:
+    st.session_state["config"] = {}
 
 # App Title
 st.title("Rooftop Solar Growth & Energy Forecast")
@@ -65,34 +72,35 @@ with tabs[0]:
 with tabs[1]:
     st.header("Controls & Distributions")
 
-    # # Simulation Settings Container
-    # with st.container():
-    #     st.subheader("Simulation Settings")
-    #     years = st.slider(
-    #         "Forecasting Duration (Years)", min_value=5, max_value=50, value=25, step=1
-    #     )
-    #     st.session_state.years = years
-
-    #     iterations = st.slider(
-    #         "Iterations (Simulations/Year)",
-    #         min_value=100,
-    #         max_value=5000,
-    #         value=1000,
-    #         step=100,
-    #     )
-    #     st.session_state.iterations = iterations
-
     # Scenario Management Container
     with st.container():
         st.header("Manage Forecast Scenarios")
         if "scenarios" not in st.session_state:
             st.session_state.scenarios = []
 
-        scenario_name = st.text_input("Scenario Name", value="Medium Growth")
-        if st.button("Create scenario"):
-            if scenario_name not in st.session_state.scenarios:
-                st.session_state.scenarios.append(scenario_name)
-                st.session_state[scenario_name] = {}
+    try:
+        template_files = [f for f in os.listdir("scenarios") if f.endswith(".yaml")]
+        templates = [os.path.splitext(f)[0] for f in template_files]
+    except Exception as e:
+        st.error("Error reading scenarios folder: " + str(e))
+        templates = []
+
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_template = st.selectbox("Select Scenario Template", templates)
+
+    with col2:
+        scenario_name = st.text_input("Scenario Name", value=selected_template)
+
+    if st.button("Create scenario"):
+        if scenario_name not in st.session_state.scenarios:
+            config_path = os.path.join("scenarios", f"{selected_template}.yaml")
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    config = yaml.safe_load(f)
+            st.session_state.scenarios.append(scenario_name)
+            st.session_state[scenario_name] = {}
+            st.session_state["config"][scenario_name] = config
 
     # Display a tab for each scenario if one or more exist.
     if st.session_state.scenarios:
@@ -235,7 +243,7 @@ with tabs[6]:
         bounds = layout.get_sensitivity_bounds("Capacity")
 
         sensitivity_results = analysis.sensitivity_total(
-            scenario, bounds, "Capacity",method='max'
+            scenario, bounds, "Capacity", method="max"
         )
         plotting.create_tornado_figure(
             sensitivity_results,
@@ -248,6 +256,10 @@ with tabs[6]:
 # -----------------------------------------------------------------------------
 with tabs[7]:
     st.header("Sensitivity Analysis: Total Energy Production")
+
+    with st.expander("Detailed Energy SensitivityAnalysis Information"):
+        layout.show_energy_sensitivity_info()
+
     if st.session_state.scenarios:
         scenario = st.selectbox(
             "Select the scenario",
@@ -256,9 +268,7 @@ with tabs[7]:
         )
         bounds = layout.get_sensitivity_bounds("Total Energy")
 
-        sensitivity_results = analysis.sensitivity_total(
-            scenario, bounds, "Energy"
-        )
+        sensitivity_results = analysis.sensitivity_total(scenario, bounds, "Energy")
         sensitivity_results["Low"] /= 1e6
         sensitivity_results["High"] /= 1e6
         sensitivity_results["Baseline"] /= 1e6
@@ -274,6 +284,10 @@ with tabs[7]:
 # -----------------------------------------------------------------------------
 with tabs[8]:
     st.header("Sensitivity Analysis: Cumulative NPV for Revenue")
+
+    with st.expander("Detailed NPV Sensitivity Analysis Information"):
+        layout.show_revenue_sensitivity_info()
+
     discount_rate = st.slider(
         "Discount Rate",
         min_value=0.0,
