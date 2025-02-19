@@ -28,7 +28,7 @@ class Layout:
             with col2:
 
                 st.session_state.iterations = st.number_input(
-                    "Iterations", min_value=1, max_value=5000, value=1000, step=100
+                    "Iterations", min_value=1, max_value=10, value=10, step=1
                 )
 
             # Scenario Management Container
