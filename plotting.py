@@ -63,22 +63,29 @@ def create_forecast_plot(
     fig = go.Figure()
 
     yaxis_title = {
-        "Capacity": "Capacity (MW)",
-        "Energy": "Energy Production (kWh/year)",
+        "Annual Capacity": "Capacity (MW)",
+        "Cumulative Capacity": "Capacity (MW)",
+        "Annual Households Installed": "Households Installed (#)",
+        "Cumulative Households Installed": "Cumulative Installed (#)",
+        "Fraction Installed": r"Total Household Installed (%)",
+        "Growth Factor": r"Growth Factor",
+        "Energy": "Energy Production (MWh/year)",
         "Revenue": "Revenue ($/year)",
         "Install Cost": "Installation Costs ($/year)",
     }[forecast_choice]
 
     for scenario_name in st.session_state.scenarios:
 
+        if st.session_state[scenario_name]['run'] == False:
+            continue
+
         df = st.session_state[scenario_name][data_name]
 
-        years = st.session_state.years
         color = st.session_state[scenario_name]["color"]
-        x_vals = np.arange(1, years + 1)
-        p10_vals = np.percentile(df, 10, axis=1)
-        p50_vals = np.median(df, axis=1)
-        p90_vals = np.percentile(df, 90, axis=1)
+        x_vals = df.columns
+        p10_vals = np.percentile(df, 10, axis=0)
+        p50_vals = np.median(df, axis=0)
+        p90_vals = np.percentile(df, 90, axis=0)
 
         # p90 trace
         fig.add_trace(
@@ -291,6 +298,9 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
 
     # Iterate over each scenario to add traces.
     for scenario in st.session_state.scenarios:
+        if st.session_state[scenario]['run'] == False:
+            continue
+
         # Retrieve the forecast DataFrame.
         forecast_key = f"{forecast_name} DF"
         if forecast_key not in st.session_state[scenario]:
@@ -299,19 +309,9 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
             )
         df = st.session_state[scenario][forecast_key]
 
-        # Identify iteration columns (all columns except "Year").
-        iter_cols = [col for col in df.columns if col != "Year"]
-
-        # Compute the year-to-year percent changes; drop the first row (NaN).
-        pct_change_df = df[iter_cols].pct_change().iloc[1:]
-
-        # Flatten all percent change values into a single array and remove any NaNs.
-        all_pct_changes = pct_change_df.values.flatten() * 100
-        all_pct_changes = all_pct_changes[~np.isnan(all_pct_changes)]
-
         # Create a PDF histogram trace.
         pdf_trace = go.Histogram(
-            x=all_pct_changes,
+            x=df.values.flatten(),
             name=scenario + "PDF",
             opacity=0.6,
             nbinsx=120,
@@ -322,7 +322,7 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
 
         # Create a CDF histogram trace (using cumulative distribution).
         cdf_trace = go.Histogram(
-            x=all_pct_changes,
+            x=df.values.flatten(),
             name=scenario + "CDF",
             opacity=0.6,
             nbinsx=120,
@@ -340,15 +340,15 @@ def plot_all_scenarios_pdf_cdf_histograms(forecast_name):
     fig.update_layout(
         barmode="overlay",
         hovermode="x unified",
-        title=f"Year-to-Year Percent Change Distribution for {forecast_name}",
+        title=f"Distribution for {forecast_name}",
         height=1000,
     )
 
     # Set axis titles for both subplots.
-    fig.update_xaxes(title_text="Year-to-Year Percent Change", row=1, col=1)
+    fig.update_xaxes(title_text="Value", row=1, col=1)
     fig.update_yaxes(title_text="Probability", row=1, col=1)
 
-    fig.update_xaxes(title_text="Year-to-Year Percent Change", row=2, col=1)
+    fig.update_xaxes(title_text="Value", row=2, col=1)
     fig.update_yaxes(title_text="Cumulative Probability", row=2, col=1)
 
     st.plotly_chart(fig, use_container_width=True)
@@ -373,6 +373,8 @@ def plot_tracking_data(metric):
     fig = go.Figure()
 
     for scenario in st.session_state.scenarios:
+        if st.session_state[scenario]['run'] == False:
+            continue
         y_data = st.session_state[scenario].get("tracking_data", {})[metric]
         color = st.session_state[scenario]["color"]
 
@@ -479,5 +481,3 @@ def create_tornado_figure(bounds_df: pd.DataFrame, title, x_axis_title):
     )
 
     st.plotly_chart(fig, use_container_width=True)
-
-

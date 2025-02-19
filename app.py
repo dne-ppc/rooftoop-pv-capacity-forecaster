@@ -15,9 +15,7 @@ Modules:
 import streamlit as st
 import pandas as pd
 
-import plotting
-import layout
-import analysis
+from layout import Layout
 
 # -----------------------------------------------------------------------------
 # Page Configuration and Session State Initialization
@@ -31,6 +29,10 @@ if "years" not in st.session_state:
 if "iterations" not in st.session_state:
     st.session_state.iterations = 1000
 
+if "model_run" not in st.session_state:
+    st.session_state.model_run = False
+
+
 if "config" not in st.session_state:
     st.session_state["config"] = {}
 
@@ -42,45 +44,21 @@ st.title("Rooftop Solar Growth & Energy Forecast")
 # -----------------------------------------------------------------------------
 
 
-sections = pd.DataFrame(
-    [
-        {
-            "title": "Info",
-            "function": layout.show_help_modal,
-        },
-        {
-            "title": "Controls",
-            "function": layout.create_controls_tab,
-        },
-        {
-            "title": "Forecasts",
-            "function": layout.create_forecasts_tab,
-        },
-        {
-            "title": "Change Distribution",
-            "function": layout.create_change_dist_tab,
-        },
-        {
-            "title": 'Timeseries Metrics',
-            "function": layout.create_ts_metrics_tab,
-        },
-        {
-            "title": "Capacity Sensitivity",
-            "function": layout.create_cap_sensitivity_tab,
-        },
-        {
-            "title": 'Energy Sensitivity',
-            "function": layout.create_energy_sensitivity_tab,
-        },
-        {
-            "title": 'Revenue Sensitivity',
-            "function": layout.create_rev_sensitivity_tab,
-        },
-        {"title": "NPV", "function": layout.create_npv_tab},
-    ]
-)
+sections = [
+    "Help",
+    "Controls",
+    "Forecasts",
+    "Change Distribution",
+    "Timeseries Metrics",
+    # "Capacity Sensitivity",
+    # "Energy Sensitivity",
+    # "Revenue Sensitivity",
+    # "NPV"
+]
 
-tabs = st.tabs(sections['title'].to_list())
 
-for tab, func in zip(tabs, sections.function):
-    func(tab)
+
+tabs = st.tabs(sections)
+
+for tab_name, tab in zip(sections, tabs):
+    Layout.dispatch(tab_name.lower().replace(" ", "_"), tab)
